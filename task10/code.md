@@ -1,26 +1,33 @@
 ## Problem Statement
 
-Design a Campus Event Financial Planning System that computes total event expenditure across multiple categories (venue, equipment, catering, transport, and certificates), factors in fixed sponsorship revenues, determines participant contribution requirements, evaluates funding shortfalls, and calculates the minimum registration count needed to achieve financial break-even.
+Design an Examination Result and Grace-Mark Validation System that processes student marks across multiple subjects, verifies subject-wise pass criteria, applies a conditional grace-mark policy for borderline failures without exceeding maximum possible subject marks, and generates final academic classifications (Distinction, First Class, Pass, or Fail).
 
-**Financial Rules:**
+**Grading & Policy Rules:**
 
-* **Total Cost:** $\text{Venue Cost} + \text{Equipment Cost} + \text{Catering Cost} + \text{Transport Cost} + \text{Certificate Cost}$
-* **Net Funding Needed:** $\text{Total Cost} - \text{Total Sponsorships}$
-* **Break-Even Registration Count:** $\lceil \text{Net Funding Needed} / \text{Per-Participant Fee} \rceil$
+* **Passing Mark:** $\ge 40.0$ in every subject.
+* **Grace-Mark Policy:** If a student fails in up to $2$ subjects by a margin of $\le 5.0$ marks per subject, grace marks can be awarded to push them to the passing threshold ($40.0$), provided the adjusted score does not exceed the maximum mark limit ($100.0$).
+* **Classifications:**
+* *Distinction:* Aggregate percentage $\ge 75.0\%$ with no subject failures.
+* *First Class:* Aggregate percentage $\ge 60.0\%$ with no subject failures.
+* *Pass:* Aggregate percentage $\ge 40.0\%$ with all subjects passed (including via grace marks).
+* *Fail:* Failed in one or more subjects even after applying grace marks.
+
+
 
 ---
 
 ## Algorithm
 
-1. **Initialize:** Define fixed expenses (venue, equipment, transport), variable expenses per participant (catering, certificates), sponsorship funds, and proposed registration fee per participant.
-2. **Calculate Total Fixed Costs:** Sum venue rental, equipment rentals, and transportation expenses.
-3. **Calculate Variable Cost per Participant:** Sum per-head catering and certificate printing expenses.
-4. **Evaluate Breakeven Point:**
-* Determine net cost after subtracting sponsorships.
-* Calculate minimum registration count by dividing net cost by the per-participant registration fee (rounded up to the nearest whole integer).
+1. **Initialize:** Define passing thresholds, maximum subject marks, and grace-mark limits (max $5$ marks per subject, max $2$ failing subjects).
+2. **Evaluate Individual Subjects:** Iterate through each student's subject scores:
+* Identify subjects below the passing mark ($40.0$).
+* Check if the failing margin is within the allowable grace limit ($\le 5.0$).
 
 
-5. **Output Results:** Display cost breakdown, sponsorship details, net deficit/surplus, and the break-even registration threshold.
+3. **Apply Grace Marks:** If eligible, add required grace marks to the failing subjects up to the passing threshold ($40.0$).
+4. **Calculate Final Aggregate & Percentage:** Compute total marks earned out of maximum possible marks and determine the overall percentage.
+5. **Classify Result:** Evaluate final status (Distinction, First Class, Pass, or Fail) based on percentage and subject pass status.
+6. **Output Results:** Display student grade sheets, grace marks awarded, final percentages, and academic classifications.
 
 ---
 
@@ -28,15 +35,29 @@ Design a Campus Event Financial Planning System that computes total event expend
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Input Fixed Costs, Variable Costs per Head, Sponsorships, & Reg Fee]
-    B --> C[Total Fixed Cost = Venue + Equipment + Transport]
-    C --> D[Variable Cost Per Head = Catering + Certificates]
-    D --> E[Input Expected Participant Count]
-    E --> F[Total Event Cost = Fixed Cost + (Variable Cost Per Head * Participants)]
-    F --> G[Net Deficit = Total Cost - Sponsorships]
-    G --> H[Break-Even Count = Ceiling(Net Deficit / Registration Fee)]
-    H --> I[Store & Display Financial Summary & Break-Even Analysis]
-    I --> J[Stop]
+    A[Start] --> B[Input Student Marks Across Subjects & Max Marks]
+    B --> C{For Each Subject:\nScore >= 40?}
+    C -- Yes --> D[Subject Passed]
+    C -- No --> E{Deficit <= 5 & Failed Count <= 2?}
+    E -- Yes --> F[Apply Grace Marks up to 40]
+    E -- No --> G[Mark Subject Failed - Ineligible for Grace]
+    D --> H{More Subjects?}
+    F --> H
+    G --> H
+    H -- Yes --> C
+    H -- No --> I{Any Unresolved Failures?}
+    I -- Yes --> J[Classification: Fail]
+    I -- No --> K[Calculate Aggregate Percentage]
+    K --> L{Percentage >= 75%?}
+    L -- Yes --> M[Classification: Distinction]
+    L -- No --> N{Percentage >= 60%?}
+    N -- Yes --> O[Classification: First Class]
+    N -- No --> P[Classification: Pass]
+    J --> Q[Store & Display Result Slip]
+    M --> Q
+    O --> Q
+    P --> Q
+    Q --> R[Stop]
 
 ```
 
@@ -45,72 +66,94 @@ flowchart TD
 ## Python Source Code
 
 ```python
-import math
+def process_exam_results(student):
+  scores = list(student["subject_scores"])
+  num_subjects = len(scores)
+  max_possible_marks = num_subjects * 100.0
 
+  failing_indices = []
+  for i, score in enumerate(scores):
+    if score < 40.0:
+      failing_indices.append(i)
 
-def calculate_event_finances(
-    fixed_costs, variable_costs, sponsorships, expected_participants, reg_fee
-):
-  total_fixed = (
-      fixed_costs["venue"]
-      + fixed_costs["equipment"]
-      + fixed_costs["transport"]
-  )
-  variable_per_head = (
-      variable_costs["catering"] + variable_costs["certificates"]
-  )
+  grace_marks_allocated = [0.0] * num_subjects
+  is_eligible_for_grace = len(failing_indices) <= 2
 
-  total_variable = variable_per_head * expected_participants
-  total_cost = total_fixed + total_variable
+  if is_eligible_for_grace:
+    for idx in failing_indices:
+      deficit = 40.0 - scores[idx]
+      if deficit <= 5.0:
+        grace_marks_allocated[idx] = deficit
+        scores[idx] = 40.0
+      else:
+        is_eligible_for_grace = False
+        break
 
-  net_funding_needed = total_cost - sponsorships
+  final_status = "Pass"
+  has_failed = any(score < 40.0 for score in scores)
 
-  if reg_fee > 0:
-    breakeven_count = math.ceil(net_funding_needed / reg_fee)
+  if has_failed or (len(failing_indices) > 2 and not is_eligible_for_grace):
+    final_status = "Fail"
+    classification = "Fail"
   else:
-    breakeven_count = float("inf")
+    total_marks = sum(scores)
+    percentage = (total_marks / max_possible_marks) * 100.0
 
-  expected_revenue = expected_participants * reg_fee
-  expected_shortfall = max(0.0, net_funding_needed - expected_revenue)
+    if percentage >= 75.0:
+      classification = "Distinction"
+    elif percentage >= 60.0:
+      classification = "First Class"
+    else:
+      classification = "Pass"
+
+  total_final_marks = sum(scores)
+  final_percentage = (total_final_marks / max_possible_marks) * 100.0
 
   return {
-      "total_fixed_cost": round(total_fixed, 2),
-      "variable_cost_per_head": round(variable_per_head, 2),
-      "total_event_cost": round(total_cost, 2),
-      "total_sponsorships": round(sponsorships, 2),
-      "net_funding_needed": round(net_funding_needed, 2),
-      "breakeven_registration_count": max(0, breakeven_count),
-      "expected_revenue": round(expected_revenue, 2),
-      "expected_shortfall": round(expected_shortfall, 2),
+      "student_id": student["student_id"],
+      "name": student["name"],
+      "original_scores": student["subject_scores"],
+      "adjusted_scores": scores,
+      "grace_marks": grace_marks_allocated,
+      "total_marks": round(total_final_marks, 2),
+      "percentage": round(final_percentage, 2),
+      "classification": classification,
   }
 
 
 if __name__ == "__main__":
-  fixed_costs = {"venue": 1500.0, "equipment": 800.0, "transport": 500.0}
+  students = [
+      {
+          "student_id": "ST901",
+          "name": "Alice Vance",
+          "subject_scores": [85.0, 78.0, 92.0, 88.0, 90.0],
+      },
+      {
+          "student_id": "ST902",
+          "name": "Brian Miller",
+          "subject_scores": [37.0, 65.0, 70.0, 72.0, 68.0],
+      },
+      {
+          "student_id": "ST903",
+          "name": "Clara Oswald",
+          "subject_scores": [35.0, 36.0, 60.0, 55.0, 50.0],
+      },
+      {
+          "student_id": "ST904",
+          "name": "David Tennant",
+          "subject_scores": [30.0, 32.0, 25.0, 45.0, 50.0],
+      },
+  ]
 
-  variable_costs = {"catering": 25.0, "certificates": 5.0}
-
-  sponsorships = 2000.0
-  expected_participants = 120
-  registration_fee = 35.0
-
-  finances = calculate_event_finances(
-      fixed_costs,
-      variable_costs,
-      sponsorships,
-      expected_participants,
-      registration_fee,
-  )
-
-  print("=== CAMPUS EVENT FINANCIAL REPORT ===")
-  print(f"Total Fixed Costs: ${finances['total_fixed_cost']}")
-  print(f"Variable Cost Per Participant: ${finances['variable_cost_per_head']}")
-  print(f"Total Projected Cost ({expected_participants} participants): ${finances['total_event_cost']}")
-  print(f"Total Sponsorships: ${finances['total_sponsorships']}")
-  print(f"Net Funding Deficit: ${finances['net_funding_needed']}")
-  print("-" * 45)
-  print(f"Minimum Registrations Needed to Break Even: {finances['breakeven_registration_count']}")
-  print(f"Projected Revenue from {expected_participants} Attendees: ${finances['expected_revenue']}")
-  print(f"Projected Shortfall / Surplus: ${finances['expected_shortfall']}")
+  print("=== EXAMINATION RESULTS & CLASSIFICATIONS ===")
+  for s in students:
+    res = process_exam_results(s)
+    print(f"ID: {res['student_id']} | Name: {res['name']}")
+    print(f"Original Scores: {res['original_scores']}")
+    print(f"Adjusted Scores: {res['adjusted_scores']}")
+    print(f"Grace Marks Added: {res['grace_marks']}")
+    print(f"Total Marks: {res['total_marks']} / 500 | Percentage: {res['percentage']}%")
+    print(f"Classification: {res['classification']}")
+    print("-" * 55)
 
 ```
